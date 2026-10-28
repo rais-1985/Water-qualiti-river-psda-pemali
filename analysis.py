@@ -1,7 +1,7 @@
 import sys, json, numpy as np, pandas as pd
-sys.path.insert(0, '/home/claude/exp')
+import os
 import common
-common.RAW = '/home/claude/data6/ds.xlsx'
+os.makedirs(common.OUT, exist_ok=True)
 from common import load
 from sklearn.metrics import cohen_kappa_score
 import matplotlib; matplotlib.use('Agg'); import matplotlib.pyplot as plt
@@ -131,8 +131,8 @@ bs = [((c[rng.integers(0, len(c), len(c))]) >= 2).mean() for _ in range(5000)]
 R['p_mod'] = dict(p=float((c >= 2).mean()), lo=float(np.percentile(bs, 2.5)), hi=float(np.percentile(bs, 97.5)))
 bs = [ika(c8[rng.integers(0, len(c8), len(c8))]) for c8 in [d['IKA8c_half'].to_numpy()] for _ in range(5000)]
 R['ika_ci'] = [float(np.percentile(bs, 2.5)), float(np.percentile(bs, 97.5))]
-json.dump(R, open('/home/claude/art1/res.json', 'w'), indent=1, ensure_ascii=False)
-d.to_csv('/home/claude/art1/status_per_sample.csv', index=False)
+json.dump(R, open(os.path.join(common.OUT, 'res.json'), 'w'), indent=1, ensure_ascii=False)
+d.to_csv(os.path.join(common.OUT, 'status_per_sample.csv'), index=False)
 
 # ---------- gambar ----------
 plt.rcParams.update({'font.family': 'serif', 'font.serif': ['Times New Roman', 'DejaVu Serif'], 'font.size': 9})
@@ -152,7 +152,7 @@ for yy, v in zip(y - h / 2, b):
 ax.set_yticks(y, keys); ax.set_xlabel('Samples in which the parameter has the maximum corrected ratio')
 for s_ in ['top', 'right']: ax.spines[s_].set_visible(False)
 ax.grid(axis='x', alpha=.25); ax.legend(frameon=False, fontsize=7.5, loc='lower right')
-fig.tight_layout(); fig.savefig('/home/claude/art1/fig_det.png', dpi=300); plt.close(fig)
+fig.tight_layout(); fig.savefig(os.path.join(common.OUT, 'fig_det.png'), dpi=300); plt.close(fig)
 # Fig 3: skenario LOD (stacked, IP15 dan IKA8)
 fig, axs = plt.subplots(1, 2, figsize=(6.0, 2.6), sharey=True)
 for ax, nm, tt in zip(axs, ['IP15', 'IKA8'], ['(a) PI, 14 parameters', '(b) IKA parameter set']):
@@ -168,7 +168,7 @@ for ax, nm, tt in zip(axs, ['IP15', 'IKA8'], ['(a) PI, 14 parameters', '(b) IKA 
 axs[0].set_ylabel('Substitution of values < LOQ')
 h, l = axs[0].get_legend_handles_labels()
 fig.legend(h, l, loc='lower center', ncol=4, frameon=False, fontsize=7.5, bbox_to_anchor=(0.5, -0.02))
-fig.tight_layout(rect=(0, 0.08, 1, 1)); fig.savefig('/home/claude/art1/fig_lod.png', dpi=300); plt.close(fig)
+fig.tight_layout(rect=(0, 0.08, 1, 1)); fig.savefig(os.path.join(common.OUT, 'fig_lod.png'), dpi=300); plt.close(fig)
 print(json.dumps({k: R[k] for k in ['scen', 'det_IP15', 'det_IKA8', 'det_IP15_zero', 'lopo', 'year', 'ika_all', 'n_rivers', 'n_points', 'p_mod', 'ika_ci', 'fc_right', 'xtab', 'ratio_gt1']}, indent=0, ensure_ascii=False))
 for x in desc: print(x)
 for x in R['river']: print(x)
@@ -186,5 +186,5 @@ R['fc_sens'] = fcr
 # sulfida tersensor dengan LOD > baku mutu: status bila sulfida dikeluarkan untuk sampel tersebut
 R['sulf_cens_idx'] = [int(i) for i in d.index[flags['Sulfida'] == -1]]
 R['sulf_cens_status'] = [int(x) for x in d.loc[flags['Sulfida'] == -1, 'IP15c_half']]
-json.dump(R, open('/home/claude/art1/res.json', 'w'), indent=1, ensure_ascii=False)
+json.dump(R, open(os.path.join(common.OUT, 'res.json'), 'w'), indent=1, ensure_ascii=False)
 print('FC', fcr); print('sulf cens', R['sulf_cens_status'], d.loc[flags['Sulfida'] == -1, 'IP15arg_half'].tolist())

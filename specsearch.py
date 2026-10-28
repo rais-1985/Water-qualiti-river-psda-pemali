@@ -10,8 +10,8 @@ Objectives: O1 = number of the 54 reported classes reproduced;
             O2 = max |PI_c - PI_report| over the 18 PI values published in the 2024 report.
 """
 import sys, json, itertools, time, numpy as np, pandas as pd
-sys.path.insert(0, '/home/claude/exp'); import common
-common.RAW = '/home/claude/data6/ds.xlsx'
+import os, common
+os.makedirs(common.OUT, exist_ok=True)
 d, fl = common.load()
 lab = np.where(d.y == 1, 2, 1)
 BM = {'TDS': 1000, 'TSS': 50, 'NH3N': 0.2, 'BOD': 3, 'COD': 25, 'MBAS': 0.2, 'PO4': 0.2, 'MinyakLemak': 1,
@@ -107,7 +107,7 @@ abl = {'recovered': get('inv', 'LOQ', 1, 'log', sid12),
        '+ sulfide + phosphate (documented set)': get('inv', 'LOQ', 1, 'log', sid_of(P12 + ['Sulfida', 'PO4'])),
        'documented specification': get('sat', 'LOQ/2', 1, 'log', sid_of(P12 + ['Sulfida', 'PO4']))}
 out['ablation'] = abl
-json.dump(out, open('/home/claude/art1/spec.json', 'w'), indent=1)
+json.dump(out, open(os.path.join(common.OUT, 'spec.json'), 'w'), indent=1)
 print(json.dumps({k: v for k, v in out.items() if k not in ('both',)}, indent=0)[:4000])
 print('BOTH:'); [print(x) for x in out['both'][:20]]
 
@@ -122,5 +122,5 @@ for _, x in num.iterrows():
 out['holdout'] = ho
 # search-space reduction by each evidence source
 out['reduction'] = dict(all=N, labels=int(len(full)), pi2024=int(len(num)), both=int(len(both)))
-json.dump(out, open('/home/claude/art1/spec.json', 'w'), indent=1)
+json.dump(out, open(os.path.join(common.OUT, 'spec.json'), 'w'), indent=1)
 for h in ho: print(h)
