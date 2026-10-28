@@ -1,10 +1,10 @@
 # Data
 
 The laboratory data are **not included** in this repository. They come from the river water quality
-monitoring of the Water Resources Management Office (BPDSDA / PSDA) Pemali Comal, Central Java, Indonesia,
+monitoring of the Water Resources Management Office (BPSDA / PSDA) Pemali Comal, Central Java, Indonesia,
 analysed by the environmental laboratory of PT Cito Diagnostika Utama (CDULab). The test reports state that
 results may not be reproduced without the written permission of the laboratory, so the data can only be
-obtained from **BPDSDA Pemali Comal** upon request and with its written permission.
+obtained from **BPSDA Pemali Comal** upon request and with its written permission.
 
 ## Expected format
 

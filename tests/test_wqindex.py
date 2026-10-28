@@ -1,6 +1,7 @@
 """Test suite for wqindex.
 
-(A) Oracle tests against values published by the laboratory  -> need the dataset (skipped otherwise).
+(A) Oracle tests against values published by the laboratory  -> need the dataset (skipped otherwise);
+    class oracles use the 53 verified labels only (common.UNVERIFIED).
 (B) Regression test against the analysis pipeline               -> needs the dataset and outputs/status_per_sample.csv.
 (C) Metamorphic and unit tests                                   -> run on synthetic samples, and also on the
                                                                     dataset when it is available.
@@ -50,6 +51,8 @@ def real():
 
 DF, REAL, LABELS = real() if HAVE_DATA else (None, [], [])
 I24 = [i for i in range(len(REAL)) if DF.YEAR[i] == 2024]
+# labels verified against the reports (the class of the 2023 downstream Rambut point was not verifiable)
+IVER = [i for i in range(len(REAL)) if (int(DF.YEAR[i]), str(DF.LOCATIONS[i]).strip().upper()) not in common.UNVERIFIED]
 SAMPLES = synthetic() + REAL
 POLL = list(LIMITS)
 RNG = random.Random(7)
@@ -66,7 +69,7 @@ def test_oracle_pi_2024(i):
 
 
 @needs_data
-@pytest.mark.parametrize('i', range(len(REAL)))
+@pytest.mark.parametrize('i', IVER)
 def test_oracle_class(i):
     assert pi_class(pi(REAL[i], LAB_SPEC)) == LABELS[i]
 

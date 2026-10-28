@@ -6,7 +6,7 @@ A configuration c = (S, rho_DO, kappa_L, kappa_R, gamma):
   kappa_L substitution for left-censored values: 0, LOQ/2, LOQ/sqrt2, LOQ
   kappa_R multiplier for right-censored fecal coliform: 1, 2, 10
   gamma   ratio correction: 'log' (1+5log10 r for r>1) or 'none'
-Objectives: O1 = number of the 54 reported classes reproduced;
+Objectives: O1 = number of the 53 verified reported classes reproduced (see common.UNVERIFIED);
             O2 = max |PI_c - PI_report| over the 18 PI values published in the 2024 report.
 """
 import sys, json, itertools, time, numpy as np, pandas as pd
@@ -14,6 +14,8 @@ import os, common
 os.makedirs(common.OUT, exist_ok=True)
 d, fl = common.load()
 lab = np.where(d.y == 1, 2, 1)
+ver = common.verified(d)                          # 53 verified labels
+NV = int(ver.sum())
 BM = {'TDS': 1000, 'TSS': 50, 'NH3N': 0.2, 'BOD': 3, 'COD': 25, 'MBAS': 0.2, 'PO4': 0.2, 'MinyakLemak': 1,
       'NO3N': 10, 'Sulfida': 0.002, 'Pb': 0.03, 'FecalColi': 1000}
 CAND = list(BM) + ['DO', 'pH']                     # 14 candidate parameters
@@ -59,7 +61,7 @@ size = S.sum(1)
 def cls(pi): return np.where(pi <= 1, 0, np.where(pi <= 5, 1, np.where(pi <= 10, 2, 3)))
 
 
-t0 = time.time(); rows = []
+t0 = time.time(); rows = []; eq_pi = set(); eq_cls = set()
 for rdo, cl, cr, gam in itertools.product(DO_R, CL, CR, GAM):
     M = ratio_matrix(rdo, cl, cr, gam)                       # 54 x 14
     mean = (M @ S.T) / size                                  # 54 x 16383
@@ -67,7 +69,10 @@ for rdo, cl, cr, gam in itertools.product(DO_R, CL, CR, GAM):
     for j in range(K):
         mx = np.where(S[:, j][None, :], np.maximum(mx, M[:, [j]]), mx)
     PI = np.sqrt((mx ** 2 + mean ** 2) / 2)
-    o1 = (cls(PI) == lab[:, None]).sum(0)
+    o1 = (cls(PI)[ver] == lab[ver][:, None]).sum(0)
+    # equivalence classes: configurations with identical PI (or class) vectors over all samples
+    for row in np.unique(np.round(PI.T, 9), axis=0): eq_pi.add(row.tobytes())
+    for row in np.unique(cls(PI).T, axis=0): eq_cls.add(row.tobytes())
     o2 = np.abs(PI[i24] - pi24[:, None]).max(0)
     for k in range(S.shape[0]):
         rows.append((rdo, cl, cr, gam, k, int(o1[k]), float(o2[k])))
@@ -77,8 +82,8 @@ R['params'] = R.sid.map(lambda k: '+'.join(p for p, b in zip(CAND, S[k]) if b))
 R['np'] = R.sid.map(lambda k: int(S[k].sum()))
 N = len(R)
 TOL = 0.025                                                   # reported PI are rounded to 2 decimals
-full = R[R.o1 == 54]; num = R[R.o2 <= TOL]; both = R[(R.o1 == 54) & (R.o2 <= TOL)]
-out = dict(N=N, seconds=el, n_subsets=int(S.shape[0]), n_rules=int(N / S.shape[0]),
+full = R[R.o1 == NV]; num = R[R.o2 <= TOL]; both = R[(R.o1 == NV) & (R.o2 <= TOL)]
+out = dict(N=N, NV=NV, n_eq_pi=len(eq_pi), n_eq_cls=len(eq_cls), seconds=el, n_subsets=int(S.shape[0]), n_rules=int(N / S.shape[0]),
            n_label=int(len(full)), n_num=int(len(num)), n_both=int(len(both)), tol=TOL,
            o1_dist={int(k): int(v) for k, v in R.o1.value_counts().sort_index().items()},
            both=both.sort_values('o2').drop(columns='sid').to_dict('records'),
@@ -112,13 +117,14 @@ print(json.dumps({k: v for k, v in out.items() if k not in ('both',)}, indent=0)
 print('BOTH:'); [print(x) for x in out['both'][:20]]
 
 # ---- hold-out check: identify with the 2024 PI values only, evaluate on 2023 and 2025 labels ----
-iho = np.where(d.tahun != 2024)[0]
+iho = np.where((d.tahun != 2024).to_numpy() & ver)[0]       # 35 independent verified labels
 ho = []
 for _, x in num.iterrows():
     M = ratio_matrix(x.do, x.cl, x.cr, x.gam); s = S[x.sid]
     a = M[:, s]; PI = np.sqrt((a.max(1) ** 2 + a.mean(1) ** 2) / 2)
     ho.append(dict(do=x.do, cl=x.cl, cr=int(x.cr), gam=x.gam, params=x.params, o2=round(float(x.o2), 4),
-                   lab24=int((cls(PI)[i24] == lab[i24]).sum()), hold=int((cls(PI)[iho] == lab[iho]).sum()), n_hold=len(iho)))
+                   lab24=int((cls(PI)[i24] == lab[i24]).sum()), hold=int((cls(PI)[iho] == lab[iho]).sum()), n_hold=len(iho),
+                   missed=[f'{int(d.tahun[i])} {d.lokasi[i]} (PI {PI[i]:.2f})' for i in iho if cls(PI)[i] != lab[i]]))
 out['holdout'] = ho
 # search-space reduction by each evidence source
 out['reduction'] = dict(all=N, labels=int(len(full)), pi2024=int(len(num)), both=int(len(both)))

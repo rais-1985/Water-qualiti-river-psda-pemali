@@ -1,7 +1,7 @@
 cff-version: 1.2.0
 message: "If you use this software, please cite it as below."
 title: "Recovering undocumented specifications of a regulatory water quality index"
-version: 1.0.1
+version: 1.1.0
 license: GPL-3.0
 repository-code: "https://github.com/rais-1985/Water-qualiti-river-psda-pemali"
 authors:

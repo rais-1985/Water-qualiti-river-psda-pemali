@@ -60,19 +60,21 @@ for p in ['Suhu', 'pH', 'DO', 'TDS', 'TSS', 'BOD', 'COD', 'NH3N', 'NO3N', 'PO4',
     v = d[p]; f = flags[p]
     lods = sorted(set((v[f == -1] * 2).round(3)))
     if p in BM:
-        exc = (v[f != -1] > BM[p]).sum()
+        exc = (v[f == 0] > BM[p]).sum()                       # quantified values above the standard
+        exc_r = int(((f == 1) & (v > BM[p])).sum())            # right-censored values (certainly above)
         # tersensor kiri dengan LOD > baku mutu: status tak tentu
         lod_gt = int(((f == -1) & (v * 2 > BM[p])).sum())
-    elif p == 'DO': exc = (v < 4).sum(); lod_gt = 0
-    elif p == 'pH': exc = ((v < 6) | (v > 9)).sum(); lod_gt = 0
-    else: exc = None; lod_gt = 0
-    desc.append(dict(p=NAME[p], unit=UNIT[p], std=STD[p], cens=int((f == -1).sum()), rcens=int((f == 1).sum()),
+    elif p == 'DO': exc = (v < 4).sum(); lod_gt = 0; exc_r = 0
+    elif p == 'pH': exc = ((v < 6) | (v > 9)).sum(); lod_gt = 0; exc_r = 0
+    else: exc = None; lod_gt = 0; exc_r = 0
+    desc.append(dict(p=NAME[p], unit=UNIT[p], std=STD[p], cens=int((f == -1).sum()), rcens=int((f == 1).sum()), exc_r=exc_r, nq=int((f == 0).sum()),
                      lods=', '.join(f'{x:g}' for x in lods), med=float(v.median()), mn=float(v.min()), mx=float(v.max()),
                      exc=None if exc is None else int(exc), lod_gt=lod_gt, ika=p in IKA_P))
 R['desc'] = desc
 
 # ---------- status per skenario ----------
 lab = np.where(d.y == 1, 2, 1)
+ver = common.verified(d)            # labels verified against the reports (53 of 54)
 for mode in MODES:
     for nm, params in [('IP15', ALL), ('IKA8', IKA_P)]:
         res = [ip(i, mode, params) for i in d.index]
@@ -84,7 +86,7 @@ for nm in ['IP15', 'IKA8']:
         c = d[f'{nm}c_{mode}']
         sc[f'{nm}_{mode}'] = dict(dist=[int((c == k).sum()) for k in range(4)], ika=ika(c),
                                  changed=int((c != d[f'{nm}c_half']).sum()),
-                                 kappa=float(cohen_kappa_score(lab, c)), agree=float((lab == c).mean()),
+                                 kappa=float(cohen_kappa_score(lab[ver], np.asarray(c)[ver])), agree=float((lab[ver] == np.asarray(c)[ver]).mean()),
                                  medIP=float(d[f'{nm}_{mode}'].median()))
 R['scen'] = sc
 # determinan
@@ -123,7 +125,9 @@ R['river'] = sorted(br, key=lambda x: -x['n'])
 R['ika_all'] = dict(ika8=ika(d['IKA8c_half']), cat=ika_cat(ika(d['IKA8c_half'])), ika15=ika(d['IP15c_half']))
 R['n'] = len(d); R['n_rivers'] = d.river.nunique(); R['n_points'] = d.lokasi.nunique()
 R['label'] = dict(ringan=int((d.y == 0).sum()), sedang=int((d.y == 1).sum()))
-R['xtab'] = pd.crosstab(pd.Series(lab, name='lab'), pd.Series(d['IP15c_half'], name='ip')).to_dict()
+R['xtab'] = {str(k): {str(kk): int(vv) for kk, vv in v.items()} for k, v in pd.crosstab(pd.Series(lab[ver], name='lab'), pd.Series(d['IP15c_half'].to_numpy()[ver], name='ip')).to_dict().items()}
+R['xtab_ika'] = {str(k): {str(kk): int(vv) for kk, vv in v.items()} for k, v in pd.crosstab(pd.Series(lab[ver], name='lab'), pd.Series(d['IKA8c_half'].to_numpy()[ver], name='ika')).to_dict().items()}
+R['n_verified'] = int(ver.sum()); R['label_verified'] = dict(ringan=int(((d.y == 0).to_numpy() & ver).sum()), sedang=int(((d.y == 1).to_numpy() & ver).sum()))
 # bootstrap CI untuk proporsi cemar sedang+ (IP15 utama)
 rng = np.random.default_rng(1)
 c = d['IP15c_half'].to_numpy()
@@ -188,3 +192,53 @@ R['sulf_cens_idx'] = [int(i) for i in d.index[flags['Sulfida'] == -1]]
 R['sulf_cens_status'] = [int(x) for x in d.loc[flags['Sulfida'] == -1, 'IP15c_half']]
 json.dump(R, open(os.path.join(common.OUT, 'res.json'), 'w'), indent=1, ensure_ascii=False)
 print('FC', fcr); print('sulf cens', R['sulf_cens_status'], d.loc[flags['Sulfida'] == -1, 'IP15arg_half'].tolist())
+
+
+# ---------- cluster bootstrap by river (samples within a river are not independent) ----------
+rng = np.random.default_rng(2)
+rivers = d['river'].to_numpy(); ur = np.unique(rivers)
+c15 = d['IP15c_half'].to_numpy(); c8 = d['IKA8c_half'].to_numpy()
+bp, bi = [], []
+for _ in range(5000):
+    pick = rng.choice(ur, len(ur), replace=True)
+    idx = np.concatenate([np.where(rivers == r)[0] for r in pick])
+    bp.append((c15[idx] >= 2).mean()); bi.append(ika(c8[idx]))
+R['p_mod_cluster'] = [float(np.percentile(bp, 2.5)), float(np.percentile(bp, 97.5))]
+R['ika_ci_cluster'] = [float(np.percentile(bi, 2.5)), float(np.percentile(bi, 97.5))]
+
+# ---------- Lemma 1 check: removing a parameter that is not the maximum changes PI by at most
+#            |R - a_j| / (sqrt(2) (n - 1)) <= M / (sqrt(2) (n - 1))  ----------
+worst = dict(ratio=0.0, dmax=0.0, bound_at_dmax=0.0, n=0, violations=0, class_changes_nonmax=0)
+for i in d.index:
+    rr = ip(i, 'half', ALL)[2]; a = np.array(list(rr.values())); keys = list(rr.keys()); n = len(a)
+    M = a.max(); Rm = a.mean(); pi0 = np.sqrt((M ** 2 + Rm ** 2) / 2)
+    for j, k in enumerate(keys):
+        if a[j] >= M: continue                                   # maximal parameter: lemma does not apply
+        b = np.delete(a, j); pi1 = np.sqrt((b.max() ** 2 + b.mean() ** 2) / 2)
+        bound = abs(Rm - a[j]) / (np.sqrt(2) * (n - 1)); dpi = abs(pi1 - pi0)
+        worst['n'] += 1; worst['violations'] += int(dpi > bound + 1e-12)
+        worst['class_changes_nonmax'] += int(cls(pi1) != cls(pi0))
+        if dpi > worst['dmax']: worst.update(dmax=float(dpi), bound_at_dmax=float(bound))
+        worst['ratio'] = max(worst['ratio'], float(dpi / bound) if bound > 0 else 0.0)
+    worst.setdefault('gen_bound_max', 0.0)
+    worst['gen_bound_max'] = max(worst['gen_bound_max'], float(M / (np.sqrt(2) * (n - 1))))
+R['lemma'] = worst
+# margin of each sample's PI to the nearest class threshold (1, 5, 10)
+pi15 = d['IP15_half'].to_numpy()
+R['margin_min'] = float(np.min(np.abs(pi15[:, None] - np.array([1, 5, 10])[None, :])))
+R['n_margin_025'] = int((np.min(np.abs(pi15[:, None] - np.array([1, 5, 10])[None, :]), 1) < 0.25).sum())
+R['n_margin_lt_bound'] = int((np.min(np.abs(pi15[:, None] - np.array([1, 5, 10])[None, :]), 1) < worst['gen_bound_max']).sum())
+
+# ---------- sulfide reported as 0 (one 2025 value): treat as '<0.04' instead ----------
+z = d.index[(d['Sulfida'] == 0) & (flags['Sulfida'] == 0)]
+R['sulf_zero'] = [dict(loc=d.lokasi[i], year=int(d.tahun[i])) for i in z]
+chg = 0
+for i in z:
+    base_c = cls(ip(i, 'half', ALL)[0]); old = (d.at[i, 'Sulfida'], flags.at[i, 'Sulfida'])
+    for lam in (0.0, 0.5, 1 / np.sqrt(2), 1.0):
+        d.at[i, 'Sulfida'] = 0.04 * lam; chg += int(cls(ip(i, 'half', ALL)[0]) != base_c)
+    d.at[i, 'Sulfida'], flags.at[i, 'Sulfida'] = old
+R['sulf_zero_changes'] = chg
+json.dump(R, open(os.path.join(common.OUT, 'res.json'), 'w'), indent=1, ensure_ascii=False)
+print('cluster', R['p_mod_cluster'], R['ika_ci_cluster']); print('lemma', R['lemma'], R['margin_min'], R['n_margin_lt_bound'])
+print('sulf0', R['sulf_zero'], R['sulf_zero_changes']); print('xtab', R['xtab'], R['xtab_ika'], R['label_verified'])

@@ -47,3 +47,15 @@ def load(path=None):
     out['sungai'] = df['LOCATIONS'].str.upper().str.replace('SUNAI', 'SUNGAI').str.replace('PALAWANGAN', 'PLAWANGAN') \
         .str.extract(r'SUNGAI\s+([A-Z]+)')[0]
     return out, flags
+
+
+# Samples whose reported class could not be verified against the laboratory summary tables.
+# The 2023 summary table was not available for the downstream Rambut point; its class in the
+# compiled data was assigned with the recovered specification, so it is excluded from every
+# label-based analysis (objective O1, oracle tests, hold-out validation, agreement statistics).
+UNVERIFIED = {(2023, 'SUNGAI RAMBUT HILIR')}
+
+
+def verified(d):
+    """Boolean array: True for samples whose reported class is verified against the reports."""
+    return np.array([(int(t), str(l).strip().upper()) not in UNVERIFIED for t, l in zip(d['tahun'], d['lokasi'])])

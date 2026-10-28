@@ -4,7 +4,7 @@ Code for the article *Recovering Undocumented Specifications of a Regulatory Wat
 A Censoring-Aware and Tested Computational Pipeline Applied to Rivers in Central Java, Indonesia*
 (submitted to the Journal of Universal Computer Science).
 
-The study covers 54 samples (2023–2025) from 16 rivers monitored by BPDSDA Pemali Comal, Central Java, Indonesia: Boyo, Cacaban, Comal, Gangsa, Gung, Pakijangan, Pekalongan, Pemali,
+The study covers 54 samples (2023–2025) from 16 rivers monitored by BPSDA Pemali Comal, Central Java, Indonesia: Boyo, Cacaban, Comal, Gangsa, Gung, Pakijangan, Pekalongan, Pemali,
 Plawangan, Rambut, Sambong, Sengkarang, Sragi, Urang, Wadas and Waluh.
 
 ## Contents
@@ -16,6 +16,7 @@ Plawangan, Rambut, Sambong, Sengkarang, Sragi, Urang, Wadas and Waluh.
 | `analysis.py` | Status, determinants (leave-one-parameter-out), censoring sensitivity, agreement (Cohen's kappa), figures |
 | `common.py` | Data loading and parsing of censored values (`<LOQ`, `>upper bound`) |
 | `tests/test_wqindex.py` | Oracle, regression and metamorphic tests |
+| `CHANGELOG.md` | Changes between releases |
 | `data/README.md` | How to obtain the data and the expected file format |
 
 ## Installation
@@ -26,9 +27,15 @@ python -m pip install -r requirements.txt
 
 Python 3.10 or later.
 
+## Verified labels
+
+The reported class of one sample (2023, downstream Rambut) could not be verified against the laboratory
+summary tables. It is listed in `common.UNVERIFIED` and excluded from every label-based analysis, which
+therefore uses 53 verified labels.
+
 ## Data
 
-The laboratory data are **not distributed** here; they can be requested from BPDSDA Pemali Comal with its
+The laboratory data are **not distributed** here; they can be requested from BPSDA Pemali Comal with its
 written permission (see `data/README.md`). Place the file at `data/dataset.xlsx` or set `WQ_DATA`.
 
 ## Usage
@@ -37,7 +44,7 @@ written permission (see `data/README.md`). Place the file at `data/dataset.xlsx`
 export WQ_DATA=data/dataset.xlsx     # optional if the file is at this default location
 python analysis.py                   # writes outputs/res.json, outputs/status_per_sample.csv, figures
 python specsearch.py                 # writes outputs/spec.json (about 4 s)
-pytest -q                            # 82 tests with the data
+pytest -q                            # 81 tests with the data
 ```
 
 Without the data, `pytest -q` runs the metamorphic and unit tests on synthetic samples
